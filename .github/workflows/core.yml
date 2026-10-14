@@ -78,6 +78,7 @@ jobs:
         if: matrix.target == 'android'
         run: |
           "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" "ndk;28.0.13004108"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.0.13004108" >> "$GITHUB_ENV"
       - name: Select Windows x64 MinGW compiler
         if: matrix.target == 'windows-x64'
         shell: pwsh
@@ -88,8 +89,6 @@ jobs:
           if ($target -notmatch '^x86_64-w64-mingw32') { throw "Expected x64 MinGW gcc.exe, got $target" }
           "CC=$($compiler.Source)" >> $env:GITHUB_ENV
       - name: Build and package embedded core
-        env:
-          ANDROID_NDK_HOME: ${{ matrix.target == 'android' && format('{0}/ndk/28.0.13004108', env.ANDROID_HOME) || '' }}
         run: ${{ matrix.python }} .github/scripts/build_openlist_core.py ${{ matrix.target }}
       - name: Upload packaged core
         uses: actions/upload-artifact@v4
