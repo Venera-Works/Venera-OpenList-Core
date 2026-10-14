@@ -18,6 +18,14 @@ func Init(d *gorm.DB) {
 	}
 }
 
+// InitWithError is used by the embedded core. The server bootstrap retains
+// Init for its historical fatal-on-startup behaviour, while embedders return
+// database failures to their host process.
+func InitWithError(d *gorm.DB) error {
+	db = d
+	return AutoMigrate(new(model.Storage), new(model.SettingItem))
+}
+
 func AutoMigrate(dst ...interface{}) error {
 	var err error
 	if conf.Conf.Database.Type == "mysql" {

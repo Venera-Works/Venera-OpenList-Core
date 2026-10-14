@@ -14,6 +14,7 @@ import (
 	sdk "github.com/OpenListTeam/115-sdk-go"
 	"github.com/OpenListTeam/OpenList/v4/cmd/flags"
 	"github.com/OpenListTeam/OpenList/v4/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
 	"github.com/OpenListTeam/OpenList/v4/internal/driver"
 	"github.com/OpenListTeam/OpenList/v4/internal/errs"
 	"github.com/OpenListTeam/OpenList/v4/internal/model"
@@ -32,6 +33,16 @@ type Open115 struct {
 	parentPath string
 }
 
+// embedded115Transport follows base.HttpClient so proxy updates apply to the
+// SDK client without changing its redirect or header behavior.
+type embedded115Transport struct{}
+
+func (embedded115Transport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if client := base.HttpClient; client != nil && client.Transport != nil {
+		return client.Transport.RoundTrip(request)
+	}
+	return http.DefaultTransport.RoundTrip(request)
+}
 func (d *Open115) Config() driver.Config {
 	return config
 }
@@ -48,6 +59,9 @@ func (d *Open115) Init(ctx context.Context) error {
 			d.Addition.RefreshToken = s2
 			op.MustSaveDriverStorage(d)
 		}))
+	if conf.Embedded {
+		d.client.SetHttpClient(&http.Client{Transport: embedded115Transport{}})
+	}
 	if flags.Debug || flags.Dev {
 		d.client.SetDebug(true)
 	}

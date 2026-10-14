@@ -74,6 +74,9 @@ func SetProxyIfConfigured(transport *http.Transport) {
 			transport.Proxy = http.ProxyURL(proxyURL)
 		}
 	}
+	if conf.Embedded && conf.Conf.ProxyAddress == "" {
+		transport.Proxy = nil
+	}
 }
 
 // SetRestyProxyIfConfigured sets proxy for Resty client if configured
@@ -83,5 +86,8 @@ func SetRestyProxyIfConfigured(client *resty.Client) {
 		if proxyURL, err := url.Parse(conf.Conf.ProxyAddress); err == nil {
 			client.SetProxy(proxyURL.String())
 		}
+	}
+	if conf.Embedded && conf.Conf.ProxyAddress == "" {
+		client.RemoveProxy()
 	}
 }

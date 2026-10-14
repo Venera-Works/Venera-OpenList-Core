@@ -193,7 +193,7 @@ func Get(ctx context.Context, storage driver.Driver, path string, excludeTempObj
 
 	if !dirCacheExists || refreshList {
 		var obj model.Obj
-		list(ctx, storage, dir, model.ListArgs{Refresh: refreshList}, func(objs []model.Obj) error {
+		_, listErr := list(ctx, storage, dir, model.ListArgs{Refresh: refreshList}, func(objs []model.Obj) error {
 			for _, f := range objs {
 				if f.GetName() == name {
 					if excludeTemp && model.ObjHasMask(f, model.Temp) {
@@ -205,6 +205,9 @@ func Get(ctx context.Context, storage driver.Driver, path string, excludeTempObj
 			}
 			return nil
 		})
+		if listErr != nil {
+			return nil, listErr
+		}
 		if obj != nil {
 			return obj, nil
 		}

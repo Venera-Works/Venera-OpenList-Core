@@ -3,6 +3,7 @@ package op
 import (
 	"context"
 	"fmt"
+	stdpath "path"
 	"reflect"
 	"runtime"
 	"sort"
@@ -32,6 +33,25 @@ func GetAllStorages() []driver.Driver {
 
 func HasStorage(mountPath string) bool {
 	return storagesMap.Has(utils.FixAndCleanPath(mountPath))
+}
+
+// ResetEmbeddedStorages drops all loaded drivers and clears their memory and
+// file/link caches. It is intentionally only used by an embedded host that
+// supports close followed by a fresh initialize in the same process.
+func ResetEmbeddedStorages(ctx context.Context) {
+	storagesMap.Range(func(mountPath string, storage driver.Driver) bool {
+		_ = storage.Drop(ctx)
+		storagesMap.Delete(mountPath)
+		return true
+	})
+	Cache.ClearAll()
+}
+
+// InvalidateEmbeddedPath clears cached directory and direct-link state before
+// an embedded read, preventing metadata writes from merging stale bytes.
+func InvalidateEmbeddedPath(storage driver.Driver, path string) {
+	Cache.linkCache.DeleteKey(Key(storage, path))
+	Cache.dirCache.Delete(Key(storage, stdpath.Dir(path)))
 }
 
 func GetStorageByMountPath(mountPath string) (driver.Driver, error) {

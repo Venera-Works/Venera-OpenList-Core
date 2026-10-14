@@ -34,3 +34,5 @@ output/
 
 .VSCodeCounter
 *.syso
+__pycache__/
+*.pyc

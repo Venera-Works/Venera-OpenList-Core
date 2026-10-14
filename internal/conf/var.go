@@ -20,6 +20,9 @@ var (
 	ConfigPath string
 )
 
+// Embedded disables environment-proxy inheritance when the host did not pass a proxy.
+var Embedded bool
+
 var SlicesMap = make(map[string][]string)
 var FilenameCharMap = make(map[string]string)
 var PrivacyReg []*regexp.Regexp
