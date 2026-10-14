@@ -16,4 +16,6 @@ The core requires Android API 24 or later and macOS 13 or later. VeneraPlus itse
 
 CI builds `native/openlist_core` directly with Go 1.27.1, gomobile `v0.0.0-20260908204917-8b95e45f8d3e`, JDK 17, Android NDK `28.0.13004108`, and Android API 24. Pull requests, version tags, and manual dispatch build all six targets. A tag release is published only after all targets succeed.
 
+Android uses the existing CGO SQLite driver because the older pure Go libc issues system calls blocked by Android seccomp. Other platforms retain their existing SQLite driver.
+
 Published assets are immutable. Publish a new core version to rebuild an asset.

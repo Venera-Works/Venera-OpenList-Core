@@ -32,7 +32,6 @@ import (
 	"github.com/OpenListTeam/OpenList/v4/internal/stream"
 	"github.com/OpenListTeam/OpenList/v4/pkg/http_range"
 	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
-	"github.com/glebarez/sqlite"
 	log "github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -225,7 +224,7 @@ func (c *core) initialize(dataDir, proxy string) (any, error) {
 	conf.Conf.ProxyAddress = strings.TrimSpace(proxy)
 	conf.Conf.Log.Enable = false
 	log.SetOutput(io.Discard)
-	database, err := gorm.Open(sqlite.Open(path.Join(dataDir, "openlist.db")+"?_journal=WAL"), &gorm.Config{
+	database, err := gorm.Open(openSQLite(path.Join(dataDir, "openlist.db")+"?_journal=WAL"), &gorm.Config{
 		Logger:         logger.Default.LogMode(logger.Silent),
 		NamingStrategy: schema.NamingStrategy{TablePrefix: conf.Conf.Database.TablePrefix},
 	})
