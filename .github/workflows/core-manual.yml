@@ -1,0 +1,127 @@
+name: Venera OpenList Core Manual Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      android:
+        description: openlist-core-android
+        type: boolean
+        default: true
+      ios:
+        description: openlist-core-ios
+        type: boolean
+        default: false
+      linux-arm64:
+        description: openlist-core-linux-arm64
+        type: boolean
+        default: false
+      linux-x64:
+        description: openlist-core-linux-x64
+        type: boolean
+        default: false
+      macos-universal:
+        description: openlist-core-macos-universal
+        type: boolean
+        default: false
+      windows-x64:
+        description: openlist-core-windows-x64
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality and target selection
+    runs-on: ubuntu-22.04
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
+    steps:
+      - name: Select build targets
+        id: targets
+        env:
+          BUILD_INPUTS: ${{ toJSON(inputs) }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          selected = json.loads(os.environ["BUILD_INPUTS"])
+          targets = [
+              {"target": "android", "runner": "ubuntu-22.04", "python": "python3"},
+              {"target": "ios", "runner": "macos-15", "python": "python3"},
+              {"target": "linux-arm64", "runner": "ubuntu-22.04-arm", "python": "python3"},
+              {"target": "linux-x64", "runner": "ubuntu-22.04", "python": "python3"},
+              {"target": "macos-universal", "runner": "macos-15", "python": "python3"},
+              {"target": "windows-x64", "runner": "windows-2025", "python": "python"},
+          ]
+          include = [target for target in targets if selected[target["target"]]]
+          if not include:
+              raise SystemExit("Select at least one platform to build.")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("matrix=" + json.dumps({"include": include}) + "\n")
+          PY
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.27.1"
+          cache: false
+      - name: Check formatting and version
+        run: |
+          grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' VERSION
+          test "$(wc -l < VERSION)" -eq 1
+          test -z "$(gofmt -l native/openlist_core)"
+          python3 -m py_compile .github/scripts/*.py
+          python3 -m unittest discover .github/scripts/tests -v
+          go test ./native/openlist_core/...
+          go test -tags=venera_core ./native/openlist_core/... ./internal/net ./internal/op
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: quality
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.quality.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.27.1"
+          cache: false
+      - uses: actions/setup-java@v4
+        if: matrix.target == 'android'
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Select Xcode 16.4
+        if: matrix.target == 'ios' || matrix.target == 'macos-universal'
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app
+      - name: Install Android NDK 28
+        if: matrix.target == 'android'
+        run: |
+          "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" "ndk;28.0.13004108"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.0.13004108" >> "$GITHUB_ENV"
+      - name: Select Windows x64 MinGW compiler
+        if: matrix.target == 'windows-x64'
+        shell: pwsh
+        run: |
+          $compiler = Get-Command gcc.exe -ErrorAction SilentlyContinue
+          if ($null -eq $compiler) { throw 'OpenList C ABI requires x64 MinGW gcc.exe.' }
+          $target = & $compiler.Source -dumpmachine
+          if ($target -notmatch '^x86_64-w64-mingw32') { throw "Expected x64 MinGW gcc.exe, got $target" }
+          "CC=$($compiler.Source)" >> $env:GITHUB_ENV
+      - name: Build and package embedded core
+        run: ${{ matrix.python }} .github/scripts/build_openlist_core.py ${{ matrix.target }}
+      - name: Upload packaged core
+        uses: actions/upload-artifact@v4
+        with:
+          name: openlist-core-${{ matrix.target }}
+          path: dist/openlist-core-${{ matrix.target }}.zip
+          if-no-files-found: error
+          compression-level: 0
