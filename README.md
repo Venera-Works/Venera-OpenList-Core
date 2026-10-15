@@ -27,4 +27,6 @@ CI 直接构建 `native/openlist_core` 下的源码，使用 Go 1.27.1、gomobil
 
 Android 使用项目已有的 CGO SQLite 驱动，避免旧版纯 Go libc 发起 seccomp 禁止的系统调用；其他平台继续使用原 SQLite 驱动。
 
+嵌入内核使用 `-tags=venera_core -trimpath -ldflags="-s -w"` 构建，排除服务端认证、分享和压缩包缓存，并裁剪发布库的调试与符号数据。未指定 `venera_core` 时保留原服务端行为。CI 同时测试默认编译和内核编译路径。
+
 不得覆盖已发布 tag 的资产。需要重新构建时应发布新的内核版本。

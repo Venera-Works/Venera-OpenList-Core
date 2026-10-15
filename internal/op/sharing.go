@@ -1,3 +1,5 @@
+//go:build !venera_core
+
 package op
 
 import (

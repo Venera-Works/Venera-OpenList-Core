@@ -23,7 +23,7 @@ func NewCacheManager() *CacheManager {
 	return &CacheManager{
 		dirCache:     cache.NewKeyedCache[*directoryCache](time.Minute * 5),
 		linkCache:    cache.NewTypedCache[*objWithLink](time.Minute * 30),
-		userCache:    cache.NewKeyedCache[*model.User](time.Hour),
+		userCache:    newUserCache(),
 		settingCache: cache.NewKeyedCache[any](time.Hour),
 		detailCache:  cache.NewKeyedCache[*model.StorageDetails](time.Minute * 30),
 	}
@@ -83,21 +83,6 @@ func (cm *CacheManager) removeDirectoryObject(storage driver.Driver, dirPath str
 	}
 }
 
-// cache user data
-func (cm *CacheManager) SetUser(username string, user *model.User) {
-	cm.userCache.Set(username, user)
-}
-
-// cached user data
-func (cm *CacheManager) GetUser(username string) (*model.User, bool) {
-	return cm.userCache.Get(username)
-}
-
-// remove user data from cache
-func (cm *CacheManager) DeleteUser(username string) {
-	cm.userCache.Delete(username)
-}
-
 // caches setting
 func (cm *CacheManager) SetSetting(key string, setting *model.SettingItem) {
 	cm.settingCache.Set(key, setting)
@@ -148,7 +133,9 @@ func (cm *CacheManager) InvalidateStorageDetails(storage driver.Driver) {
 func (cm *CacheManager) ClearAll() {
 	cm.dirCache.Clear()
 	cm.linkCache.Clear()
-	cm.userCache.Clear()
+	if cm.userCache != nil {
+		cm.userCache.Clear()
+	}
 	cm.settingCache.Clear()
 	cm.detailCache.Clear()
 }

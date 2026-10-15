@@ -32,6 +32,7 @@ jobs:
           python3 -m py_compile .github/scripts/*.py
           python3 -m unittest discover .github/scripts/tests -v
           go test ./native/openlist_core/...
+          go test -tags=venera_core ./native/openlist_core/... ./internal/net ./internal/op
 
   build:
     name: Build ${{ matrix.target }}

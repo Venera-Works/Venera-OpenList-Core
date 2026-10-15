@@ -4,7 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
+
+func TestRegisteredDriversMatchSupportedAccounts(t *testing.T) {
+	drivers := op.GetDriverInfoMap()
+	if len(drivers) != len(allowedDrivers) {
+		t.Fatalf("registered %d drivers, want %d", len(drivers), len(allowedDrivers))
+	}
+	for name := range allowedDrivers {
+		if _, ok := drivers[name]; !ok {
+			t.Errorf("supported driver %q is not registered", name)
+		}
+	}
+}
 
 func TestCancelBeforeTaskRegistration(t *testing.T) {
 	core := &core{tasks: map[string]*taskState{}, pendingCancels: map[string]struct{}{}}

@@ -8,7 +8,6 @@ import (
 
 	"github.com/OpenListTeam/OpenList/v4/internal/conf"
 	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
-	"github.com/rclone/rclone/lib/readers"
 
 	"github.com/OpenListTeam/OpenList/v4/pkg/http_range"
 	"github.com/go-resty/resty/v2"
@@ -63,7 +62,26 @@ func GetRangedHttpReader(readCloser io.ReadCloser, offset, length int64) (io.Rea
 	}
 
 	// return an io.ReadCloser that is limited to `length` bytes.
-	return readers.NewLimitedReadCloser(readCloser, length), nil
+	if length < 0 {
+		return readCloser, nil
+	}
+	return &limitedReadCloser{
+		LimitedReader: &io.LimitedReader{R: readCloser, N: length},
+		Closer:        readCloser,
+	}, nil
+}
+
+type limitedReadCloser struct {
+	*io.LimitedReader
+	io.Closer
+}
+
+func (r *limitedReadCloser) Close() error {
+	err := r.Closer.Close()
+	if r.N == 0 {
+		return nil
+	}
+	return err
 }
 
 // SetProxyIfConfigured sets proxy for HTTP Transport if configured

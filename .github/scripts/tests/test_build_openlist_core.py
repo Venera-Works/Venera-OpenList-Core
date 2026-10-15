@@ -36,10 +36,34 @@ class BuildOpenListCoreTest(unittest.TestCase):
 
         self.assertIn(
             call(
-                "gomobile", "bind", "-target=android/arm,android/arm64,android/amd64",
+                "gomobile", "bind", "-tags=venera_core", "-trimpath", "-ldflags=-s -w",
+                "-target=android/arm,android/arm64,android/amd64",
                 "-androidapi=24", "-o", str(source), "./native/openlist_core", cwd=build.ROOT,
             ),
             mock_run.call_args_list,
+        )
+
+    @patch.object(build, "verify_ios_binding", return_value=["arm64", "arm64-simulator", "x86_64-simulator"])
+    @patch.object(build, "install_gomobile")
+    @patch.object(build, "run")
+    def test_ios_binding_uses_core_release_flags(self, mock_run, _install, _verify):
+        build.build_ios(Path("output"))
+
+        mock_run.assert_called_once_with(
+            "gomobile", "bind", "-tags=venera_core", "-trimpath", "-ldflags=-s -w",
+            "-target=ios", "-o", str(Path("output/Openlistcore.xcframework")),
+            "./native/openlist_core", cwd=build.ROOT,
+        )
+
+    @patch.object(build, "smoke_desktop")
+    @patch.object(build, "run")
+    def test_desktop_build_uses_core_release_flags(self, mock_run, _smoke):
+        build.build_desktop("windows-x64", Path("output"))
+
+        mock_run.assert_called_once_with(
+            "go", "build", "-tags=venera_core", "-trimpath", "-ldflags=-s -w",
+            "-buildmode=c-shared", "-o", str(Path("output/venera_openlist.dll")),
+            "./native/openlist_core/cabi",
         )
 
     def test_package_contains_only_requested_binary_and_metadata(self):

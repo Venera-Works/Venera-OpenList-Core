@@ -1,16 +1,12 @@
 package model
 
 import (
-	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/OpenListTeam/OpenList/v4/internal/errs"
 	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/OpenListTeam/OpenList/v4/pkg/utils/random"
-	"github.com/OpenListTeam/go-cache"
-	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/pkg/errors"
 )
 
@@ -29,8 +25,6 @@ const (
 	GuestCannotUpdateProfile  = "Guest user can not update profile"
 	GuestCannotGenerate2FA    = "Guest user can not generate 2FA code"
 )
-
-var LoginCache = cache.NewMemCache[int]()
 
 var (
 	DefaultLockDuration   = time.Minute * 5
@@ -242,31 +236,4 @@ func HashPwd(static string, salt string) string {
 
 func TwoHashPwd(password string, salt string) string {
 	return HashPwd(StaticHash(password), salt)
-}
-
-func (u *User) WebAuthnID() []byte {
-	bs := make([]byte, 8)
-	binary.LittleEndian.PutUint64(bs, uint64(u.ID))
-	return bs
-}
-
-func (u *User) WebAuthnName() string {
-	return u.Username
-}
-
-func (u *User) WebAuthnDisplayName() string {
-	return u.Username
-}
-
-func (u *User) WebAuthnCredentials() []webauthn.Credential {
-	var res []webauthn.Credential
-	err := json.Unmarshal([]byte(u.Authn), &res)
-	if err != nil {
-		fmt.Println(err)
-	}
-	return res
-}
-
-func (u *User) WebAuthnIcon() string {
-	return "https://res.oplist.org/logo/logo.svg"
 }

@@ -14,6 +14,12 @@ type linkCachePolicy struct {
 	requireReference bool
 }
 
+type objWithLink struct {
+	link   *model.Link
+	obj    model.Obj
+	policy linkCachePolicy
+}
+
 func admitLink(link *model.Link, obj model.Obj) (*objWithLink, error) {
 	if link.Expiration != nil && (link.RequireReference || link.SyncClosers.Length() > 0) {
 		return nil, errors.Join(errConflictingLinkLifecycle, link.Close())

@@ -1,3 +1,5 @@
+//go:build !venera_core
+
 package op
 
 import (
@@ -387,12 +389,6 @@ func ArchiveGet(ctx context.Context, storage driver.Driver, path string, args mo
 		}
 	}
 	return nil, nil, errors.WithStack(errs.ObjectNotFound)
-}
-
-type objWithLink struct {
-	link   *model.Link
-	obj    model.Obj
-	policy linkCachePolicy
 }
 
 var (

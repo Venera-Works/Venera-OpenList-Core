@@ -20,6 +20,7 @@ GOMOBILE_VERSION = "v0.0.0-20260908204917-8b95e45f8d3e"
 GO_VERSION = "1.27.1"
 ANDROID_API = "24"
 RPC_ABI = 1
+CORE_BUILD_FLAGS = ("-tags=venera_core", "-trimpath", "-ldflags=-s -w")
 ROOT = Path(__file__).resolve().parents[2]
 CORE = ROOT / "native" / "openlist_core"
 DIST = ROOT / "dist"
@@ -110,7 +111,7 @@ def smoke_desktop(library: Path) -> None:
 def build_android(staging: Path) -> tuple[list[Path], list[str], str | None]:
     install_gomobile()
     archive = staging / "openlistcore.aar"
-    run("gomobile", "bind", "-target=android/arm,android/arm64,android/amd64", f"-androidapi={ANDROID_API}", "-o", str(archive), "./native/openlist_core", cwd=ROOT)
+    run("gomobile", "bind", *CORE_BUILD_FLAGS, "-target=android/arm,android/arm64,android/amd64", f"-androidapi={ANDROID_API}", "-o", str(archive), "./native/openlist_core", cwd=ROOT)
     verify_android_binding(archive)
     return [archive], ["armeabi-v7a", "arm64-v8a", "x86_64"], f"Android API {ANDROID_API}"
 
@@ -118,7 +119,7 @@ def build_android(staging: Path) -> tuple[list[Path], list[str], str | None]:
 def build_ios(staging: Path) -> tuple[list[Path], list[str], str | None]:
     install_gomobile()
     framework = staging / "Openlistcore.xcframework"
-    run("gomobile", "bind", "-target=ios", "-o", str(framework), "./native/openlist_core", cwd=ROOT)
+    run("gomobile", "bind", *CORE_BUILD_FLAGS, "-target=ios", "-o", str(framework), "./native/openlist_core", cwd=ROOT)
     architectures = verify_ios_binding(framework)
     return [framework], architectures, "iOS 13"
 
@@ -150,7 +151,7 @@ def build_desktop(target: str, staging: Path) -> tuple[list[Path], list[str], st
                 "CGO_CFLAGS": f"-arch {cgoarch} -mmacosx-version-min=13.0",
                 "CGO_LDFLAGS": f"-arch {cgoarch} -mmacosx-version-min=13.0",
             })
-            run("go", "build", "-buildmode=c-shared", "-o", str(slice_path), "./native/openlist_core/cabi", env=environment)
+            run("go", "build", *CORE_BUILD_FLAGS, "-buildmode=c-shared", "-o", str(slice_path), "./native/openlist_core/cabi", env=environment)
             slices.append(slice_path)
         run("lipo", "-create", "-output", str(destination), *(str(item) for item in slices))
         for item in slices:
@@ -159,7 +160,7 @@ def build_desktop(target: str, staging: Path) -> tuple[list[Path], list[str], st
         verify_macos_architectures(destination)
         smoke_desktop(destination)
         return [destination], ["arm64", "x86_64"], "macOS 13"
-    run("go", "build", "-buildmode=c-shared", "-o", str(destination), "./native/openlist_core/cabi")
+    run("go", "build", *CORE_BUILD_FLAGS, "-buildmode=c-shared", "-o", str(destination), "./native/openlist_core/cabi")
     if target.startswith("linux-"):
         verify_linux_architecture(destination, target)
     smoke_desktop(destination)
