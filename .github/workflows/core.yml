@@ -31,7 +31,7 @@ jobs:
           test -z "$(gofmt -l native/openlist_core)"
           python3 -m py_compile .github/scripts/*.py
           python3 -m unittest discover .github/scripts/tests -v
-          go test ./native/openlist_core/...
+          go test ./drivers/123_open ./native/openlist_core/...
           go test -tags=venera_core ./native/openlist_core/... ./internal/net ./internal/op
 
   build:

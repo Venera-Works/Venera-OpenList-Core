@@ -51,8 +51,9 @@ func (d *Open123) flushAccessToken() error {
 	// Official app renewapi response contains access_token, refresh_token and expires_in.
 	if d.UseOnlineAPI && d.RefreshToken != "" && len(d.APIAddress) > 0 {
 		var resp RefreshTokenResp
-		_, err := base.RestyClient.R().
+		response, err := base.RestyClient.R().
 			SetResult(&resp).
+			SetError(&resp).
 			SetQueryParams(map[string]string{
 				"refresh_ui": d.RefreshToken,
 				"server_use": "true",
@@ -63,7 +64,7 @@ func (d *Open123) flushAccessToken() error {
 			return err
 		}
 
-		if resp.AccessToken == "" || resp.RefreshToken == "" {
+		if response.IsError() || resp.AccessToken == "" || resp.RefreshToken == "" {
 			errMessage := resp.ErrorDescription
 			if errMessage == "" {
 				errMessage = resp.Text
@@ -76,6 +77,9 @@ func (d *Open123) flushAccessToken() error {
 			}
 			if errMessage != "" {
 				return fmt.Errorf("failed to refresh token: %s", errMessage)
+			}
+			if response.IsError() {
+				return fmt.Errorf("failed to refresh token: official API returned %s", response.Status())
 			}
 			return fmt.Errorf("empty access_token or refresh_token returned from official API")
 		}
