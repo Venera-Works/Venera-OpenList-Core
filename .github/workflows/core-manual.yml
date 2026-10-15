@@ -1,4 +1,4 @@
-name: Venera OpenList Core Manual Build
+name: Venera OpenList Core 手动构建
 
 on:
   workflow_dispatch:
