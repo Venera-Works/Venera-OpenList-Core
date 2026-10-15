@@ -1,16 +1,14 @@
 # Venera OpenList Core
 
-[中文](README.zh.md) | [English](README.en.md)
+Venera OpenList Core 是 VeneraPlus 使用的嵌入式 OpenList 存储内核，不会启动 OpenList HTTP 服务。
 
-Venera OpenList Core packages the embedded OpenList storage kernel used by VeneraPlus. It does not start an OpenList HTTP service.
+源码基于 OpenList，并按 [AGPL-3.0 许可证](LICENSE) 分发。嵌入接口只暴露 VeneraPlus JSON RPC ABI，且只注册百度网盘、夸克、115、123、OneDrive 和 Google Drive。
 
-The source is based on OpenList and is distributed under the [AGPL-3.0 license](LICENSE). The embedded interface exposes only the VeneraPlus JSON RPC ABI and registers Baidu Netdisk, Quark, 115, 123, OneDrive, and Google Drive.
+## 发布
 
-## Releases
+`VERSION` 是内核版本。对应的 `core-v<version>` tag 构建六个不可覆盖的发布资产：
 
-`VERSION` is the kernel version. A matching `core-v<version>` tag builds six immutable release assets:
-
-| Target | Asset |
+| 目标 | 资产 |
 | --- | --- |
 | Android | `openlist-core-android.zip` |
 | iOS | `openlist-core-ios.zip` |
@@ -19,12 +17,14 @@ The source is based on OpenList and is distributed under the [AGPL-3.0 license](
 | Linux x64 | `openlist-core-linux-x64.zip` |
 | Linux arm64 | `openlist-core-linux-arm64.zip` |
 
-Every asset contains the platform binary, `LICENSE.OpenList.txt`, and `metadata.json`. The release-level `manifest.json` records the version, source commit, RPC ABI, asset names, and SHA256 values. VeneraPlus pins this manifest and verifies an asset before use.
+每个资产包含平台内核、`LICENSE.OpenList.txt` 和 `metadata.json`。发布顶层的 `manifest.json` 记录版本、源码提交、RPC ABI、资产名与 SHA256。VeneraPlus 固定该 manifest，并在使用资产前验证摘要。
 
-The core requires Android API 24 or later and macOS 13 or later. VeneraPlus itself continues to support macOS 12, where this feature is unavailable.
+内核要求 Android API 24 及以上、macOS 13 及以上。VeneraPlus 应用仍支持 macOS 12；该系统版本不提供此功能。
 
-## Development
+## 开发
 
-The CI builds the sources under `native/openlist_core` directly. It uses Go 1.27.1, gomobile `v0.0.0-20260908204917-8b95e45f8d3e`, JDK 17, Android NDK `28.0.13004108`, and Android API 24. Pull requests, version tags, and manual dispatch build all six release targets; a tag release is published only after every target succeeds.
+CI 直接构建 `native/openlist_core` 下的源码，使用 Go 1.27.1、gomobile `v0.0.0-20260908204917-8b95e45f8d3e`、JDK 17、Android NDK `28.0.13004108` 与 Android API 24。PR、版本 tag 和手动调度均构建六个目标；只有全部成功后才发布 tag 对应的 Release。
 
-Do not publish or replace assets under an existing tag. Release a new core version instead.
+Android 使用项目已有的 CGO SQLite 驱动，避免旧版纯 Go libc 发起 seccomp 禁止的系统调用；其他平台继续使用原 SQLite 驱动。
+
+不得覆盖已发布 tag 的资产。需要重新构建时应发布新的内核版本。
