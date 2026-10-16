@@ -1,4 +1,4 @@
-// Package openlistcore embeds exactly the six supported OpenList drivers.
+// Package openlistcore exposes the six supported OpenList account drivers.
 package openlistcore
 
 import (
@@ -22,7 +22,7 @@ import (
 	"github.com/OpenListTeam/OpenList/v4/drivers/base"
 	_ "github.com/OpenListTeam/OpenList/v4/drivers/google_drive"
 	_ "github.com/OpenListTeam/OpenList/v4/drivers/onedrive"
-	_ "github.com/OpenListTeam/OpenList/v4/drivers/quark_open"
+	_ "github.com/OpenListTeam/OpenList/v4/drivers/quark_uc"
 	"github.com/OpenListTeam/OpenList/v4/internal/conf"
 	"github.com/OpenListTeam/OpenList/v4/internal/db"
 	"github.com/OpenListTeam/OpenList/v4/internal/driver"
@@ -41,7 +41,7 @@ import (
 const accountPrefix = "venera-account:"
 
 var allowedDrivers = map[string]struct{}{
-	"BaiduNetdisk": {}, "QuarkOpen": {}, "115 Open": {}, "123 Open": {},
+	"BaiduNetdisk": {}, "Quark": {}, "115 Open": {}, "123 Open": {},
 	"Onedrive": {}, "GoogleDrive": {},
 }
 
@@ -251,7 +251,7 @@ func (c *core) initialize(dataDir, proxy string) (any, error) {
 		}
 	}
 	c.dataDir, c.initialized = dataDir, true
-	return map[string]any{"ready": true, "drivers": []string{"BaiduNetdisk", "QuarkOpen", "115 Open", "123 Open", "Onedrive", "GoogleDrive"}}, nil
+	return map[string]any{"ready": true, "drivers": []string{"BaiduNetdisk", "Quark", "115 Open", "123 Open", "Onedrive", "GoogleDrive"}}, nil
 }
 
 func (c *core) close() error {
@@ -370,13 +370,22 @@ func (c *core) saveAccount(id, driverName, name string, addition json.RawMessage
 		return nil, err
 	}
 	if old, findErr := c.findAccount(id); findErr == nil {
-		if old.Driver != driverName {
+		replacingQuarkOpen := old.Driver == "QuarkOpen" && driverName == "Quark"
+		if old.Driver != driverName && !replacingQuarkOpen {
 			return nil, fmt.Errorf("account driver cannot be changed")
 		}
 		c.cancelTasks(id, false)
 		c.waitTasks(id)
 		old.Remark, old.Addition, old.Disabled = accountRemark(id, name), normalized, false
-		if err := op.UpdateStorage(context.Background(), *old); err != nil {
+		if replacingQuarkOpen {
+			old.Driver = driverName
+			if err := db.UpdateStorage(old); err != nil {
+				return nil, err
+			}
+			if err := op.LoadStorage(context.Background(), *old); err != nil {
+				return nil, err
+			}
+		} else if err := op.UpdateStorage(context.Background(), *old); err != nil {
 			return nil, err
 		}
 	} else {
@@ -402,7 +411,7 @@ func normalizeAddition(driverName string, raw json.RawMessage) (string, error) {
 	}
 	defaults := map[string]map[string]any{
 		"BaiduNetdisk": {"root_folder_path": "/", "download_api": "official", "use_online_api": true, "api_url_address": "https://api.oplist.org/baiduyun/renewapi", "upload_thread": "3"},
-		"QuarkOpen":    {"root_folder_id": "0", "use_online_api": true, "api_url_address": "https://api.oplist.org/quarkyun/renewapi"},
+		"Quark":        {"root_folder_id": "0", "order_by": "none", "order_direction": "asc"},
 		"115 Open":     {"root_folder_id": "0", "limit_rate": 1.0, "page_size": 200},
 		"123 Open":     {"root_folder_id": "0", "use_online_api": true, "api_url_address": "https://api.oplist.org/123cloud/renewapi", "UploadThread": 3},
 		"Onedrive":     {"root_folder_path": "/", "region": "global", "use_online_api": true, "api_url_address": "https://api.oplist.org/onedrive/renewapi", "chunk_size": 5},

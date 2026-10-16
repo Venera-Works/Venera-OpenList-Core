@@ -34,7 +34,7 @@ def main() -> None:
     library.OpenListFree(allocated)
     with tempfile.TemporaryDirectory(prefix="venera-openlist-") as data_dir:
         initialized = invoke(library, {"method": "initialize", "arguments": {"dataDir": data_dir, "proxy": ""}})
-        if initialized.get("error") or initialized.get("data", {}).get("drivers") != ["BaiduNetdisk", "QuarkOpen", "115 Open", "123 Open", "Onedrive", "GoogleDrive"]:
+        if initialized.get("error") or initialized.get("data", {}).get("drivers") != ["BaiduNetdisk", "Quark", "115 Open", "123 Open", "Onedrive", "GoogleDrive"]:
             raise RuntimeError(f"initialize failed: {initialized}")
         if invoke(library, {"method": "accounts", "arguments": {}}).get("error"):
             raise RuntimeError("accounts failed")
