@@ -16,6 +16,10 @@ type Addition struct {
 	//  refresh_token方式的AccessToken  【对个人开发者暂未开放】
 	RefreshToken string `json:"RefreshToken" required:"false"`
 
+	// Absolute Unix milliseconds; keep token lifetime across restarts and sync.
+	AccessTokenExpiresAt int64 `json:"access_token_expires_at" type:"number" required:"false"`
+	TokenUpdatedAt       int64 `json:"token_updated_at" type:"number" required:"false"`
+
 	// 使用在线API
 	UseOnlineAPI bool   `json:"use_online_api" default:"true"`
 	APIAddress   string `json:"api_url_address" default:"https://api.oplist.org/123cloud/renewapi"`

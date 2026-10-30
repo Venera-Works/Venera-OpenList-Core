@@ -116,7 +116,7 @@ func (d *Open123) Upload(ctx context.Context, file model.FileStreamer, createRes
 				head := bytes.NewReader(b.Bytes()[:headSize])
 				tail := bytes.NewReader(b.Bytes()[headSize:])
 				rateLimitedRd = driver.NewLimitedUploadStream(ctx, io.MultiReader(head, reader, tail))
-				token, err := d.getAccessToken(false)
+				token, err := d.getAccessToken("")
 				if err != nil {
 					return err
 				}

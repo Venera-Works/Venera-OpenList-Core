@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/OpenListTeam/OpenList/v4/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
 	"github.com/OpenListTeam/OpenList/v4/internal/op"
 )
 
@@ -23,25 +25,25 @@ func expiresInToExpiredAt(expiresIn int64) (time.Time, error) {
 }
 
 type tokenManager struct {
-	// accessToken  string
-	expiredAt    time.Time
 	mu           sync.Mutex
-	blockRefresh bool
+	refreshError error
 }
 
-func (d *Open123) getAccessToken(forceRefresh bool) (string, error) {
+func (d *Open123) getAccessToken(rejectedToken string) (string, error) {
 	tm := d.tm
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
-	if tm.blockRefresh {
-		return "", errors.New("Authentication expired")
+	if tm.refreshError != nil {
+		return "", tm.refreshError
 	}
-	if !forceRefresh && d.AccessToken != "" && time.Now().Before(tm.expiredAt.Add(-5*time.Minute)) {
+	// Legacy tokens have no persisted expiry: try them until the API rejects them.
+	if d.AccessToken != "" && d.AccessToken != rejectedToken && (d.AccessTokenExpiresAt <= 0 || time.Now().UnixMilli() < d.AccessTokenExpiresAt) {
 		return d.AccessToken, nil
 	}
 	if err := d.flushAccessToken(); err != nil {
-		// token expired and failed to refresh, block further refresh attempts
-		tm.blockRefresh = true
+		if errors.Is(err, errs.InvalidGrant) {
+			tm.refreshError = err
+		}
 		return "", err
 	}
 	return d.AccessToken, nil
@@ -76,6 +78,10 @@ func (d *Open123) flushAccessToken() error {
 				errMessage = resp.Error
 			}
 			if errMessage != "" {
+				// APIPages can forward the OAuth description in its text field.
+				if resp.Error == "invalid_grant" || strings.Contains(errMessage, "invalid_grant") || strings.HasPrefix(errMessage, "The provided authorization grant") {
+					return fmt.Errorf("failed to refresh token: %w: %s", errs.InvalidGrant, errMessage)
+				}
 				return fmt.Errorf("failed to refresh token: %s", errMessage)
 			}
 			if response.IsError() {
@@ -90,9 +96,9 @@ func (d *Open123) flushAccessToken() error {
 
 		d.AccessToken = resp.AccessToken
 		d.RefreshToken = resp.RefreshToken
-		d.tm.expiredAt = expiredAt
+		d.AccessTokenExpiresAt = expiredAt.UnixMilli()
+		d.TokenUpdatedAt = time.Now().UnixMilli()
 		op.MustSaveDriverStorage(d)
-		d.tm.blockRefresh = false
 		return nil
 	}
 
@@ -124,9 +130,9 @@ func (d *Open123) flushAccessToken() error {
 			return fmt.Errorf("parse expire time failed: %w", err)
 		}
 		d.AccessToken = resp.Data.AccessToken
-		d.tm.expiredAt = expiredAt.UTC()
+		d.AccessTokenExpiresAt = expiredAt.UnixMilli()
+		d.TokenUpdatedAt = time.Now().UnixMilli()
 		op.MustSaveDriverStorage(d)
-		d.tm.blockRefresh = false
 		return nil
 	}
 	return errors.New("no valid authentication method available")

@@ -39,7 +39,7 @@ var ( // 不同情况下获取的AccessTokenQPS限制不同 如下模块化易�
 
 func (d *Open123) Request(apiInfo *ApiInfo, method string, callback base.ReqCallback, resp interface{}) ([]byte, error) {
 	for {
-		token, err := d.getAccessToken(false)
+		token, err := d.getAccessToken("")
 		if err != nil {
 			return nil, err
 		}
@@ -76,8 +76,8 @@ func (d *Open123) Request(apiInfo *ApiInfo, method string, callback base.ReqCall
 		if baseResp.Code == 0 {
 			return body, nil
 		} else if baseResp.Code == 401 {
-			// 强制刷新Token, 有小概率会 race condition 导致多次刷新Token，但不影响正确运行
-			if _, err := d.getAccessToken(true); err != nil {
+			// Another request may already have replaced the rejected token.
+			if _, err := d.getAccessToken(token); err != nil {
 				return nil, err
 			}
 		} else if baseResp.Code == 429 {

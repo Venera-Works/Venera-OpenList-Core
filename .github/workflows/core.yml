@@ -130,7 +130,7 @@ jobs:
         run: |
           cat > release-notes.md <<'EOF'
           ## **注意**
-          **beta版可能存在大量bug，请勿下载**
+          **beta版可能存在大量bug，无必要请勿下载**
 
           VeneraPlus embedded OpenList Core release.
           EOF

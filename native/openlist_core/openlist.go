@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -127,6 +128,8 @@ func errorResponse(err error) *rpcError {
 	code := "operation_failed"
 	if errs.IsNotFoundError(err) {
 		code = "not_found"
+	} else if errors.Is(err, errs.InvalidGrant) {
+		code = "invalid_grant"
 	} else if strings.Contains(strings.ToLower(err.Error()), "status code: 401") || strings.Contains(strings.ToLower(err.Error()), "unauthorized") {
 		code = "unauthorized"
 	}
