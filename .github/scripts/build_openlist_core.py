@@ -17,7 +17,7 @@ from pathlib import Path
 
 
 GOMOBILE_VERSION = "v0.0.0-20260908204917-8b95e45f8d3e"
-GO_VERSION = "1.27.1"
+GO_VERSION = "1.27.4"
 ANDROID_API = "24"
 RPC_ABI = 1
 CORE_BUILD_FLAGS = ("-tags=venera_core", "-trimpath", "-ldflags=-s -w")

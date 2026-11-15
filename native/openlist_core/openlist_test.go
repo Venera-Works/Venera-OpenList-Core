@@ -3,16 +3,101 @@ package openlistcore
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/OpenListTeam/OpenList/v4/drivers/base"
 	"github.com/OpenListTeam/OpenList/v4/internal/db"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
+	"github.com/OpenListTeam/OpenList/v4/internal/errs"
 	"github.com/OpenListTeam/OpenList/v4/internal/model"
 	"github.com/OpenListTeam/OpenList/v4/internal/op"
 	"github.com/go-resty/resty/v2"
 )
+
+type cachedLinkDriver struct {
+	driver.Driver
+	links int
+	gets  int
+}
+
+func (d *cachedLinkDriver) Init(context.Context) error { return nil }
+func (d *cachedLinkDriver) Drop(context.Context) error { return nil }
+func (d *cachedLinkDriver) GetRootId() string          { return "0" }
+func (d *cachedLinkDriver) Get(context.Context, string) (model.Obj, error) {
+	d.gets++
+	return &model.Object{ID: "file", Name: "book.cbz", Size: 10}, nil
+}
+func (d *cachedLinkDriver) List(context.Context, model.Obj, model.ListArgs) ([]model.Obj, error) {
+	return []model.Obj{&model.Object{ID: "file", Name: "book.cbz", Size: 10}}, nil
+}
+func (d *cachedLinkDriver) Link(context.Context, model.Obj, model.LinkArgs) (*model.Link, error) {
+	d.links++
+	expiration := time.Minute
+	return &model.Link{URL: fmt.Sprintf("https://files.example/book.cbz?v=%d", d.links), Expiration: &expiration}, nil
+}
+
+func TestEmbeddedLinkReusesCacheAndRefreshesExplicitly(t *testing.T) {
+	constructor, err := op.GetDriver("Quark")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake := &cachedLinkDriver{Driver: constructor()}
+	op.RegisterDriver(func() driver.Driver { return fake })
+	defer op.RegisterDriver(constructor)
+	c := &core{}
+	if _, err := c.initialize(t.TempDir(), ""); err != nil {
+		t.Fatal(err)
+	}
+	defer c.close()
+	if _, err := c.saveAccount("cached", "Quark", "cache", json.RawMessage(`{"cookie":"test"}`)); err != nil {
+		t.Fatal(err)
+	}
+	call := func(method, p string, refresh bool) {
+		t.Helper()
+		raw, err := json.Marshal(fileArguments{AccountID: "cached", Path: p, Refresh: refresh})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.fileOperation(method, raw); err != nil {
+			t.Fatal(err)
+		}
+	}
+	call("list", "/", false)
+	call("link", "/book.cbz", false)
+	call("link", "/book.cbz", false)
+	if fake.links != 1 || fake.gets != 0 {
+		t.Fatalf("ordinary reads missed caches: links=%d gets=%d", fake.links, fake.gets)
+	}
+	call("link", "/book.cbz", true)
+	if fake.links != 2 || fake.gets != 1 {
+		t.Fatalf("expired link was not refreshed: links=%d gets=%d", fake.links, fake.gets)
+	}
+	call("list", "/", true)
+	call("link", "/book.cbz", false)
+	if fake.links != 3 || fake.gets != 1 {
+		t.Fatalf("directory refresh did not invalidate link: links=%d gets=%d", fake.links, fake.gets)
+	}
+}
+
+func TestRateLimitResponsePreservesRetryAfter(t *testing.T) {
+	err := fmt.Errorf("list directory: %w", &errs.RateLimitError{RetryAfter: "120"})
+	result := errorResponse(err)
+	if result.Code != "rate_limited" || result.RetryAfter != "120" {
+		t.Fatalf("unexpected rate limit response: %+v", result)
+	}
+	for _, message := range []string{"HTTP 429 Too Many Requests", "code: 123, message: 操作过于频繁"} {
+		if result := errorResponse(fmt.Errorf("%s", message)); result.Code != "rate_limited" {
+			t.Fatalf("did not classify %q: %+v", message, result)
+		}
+	}
+	if result := errorResponse(fmt.Errorf("file 429.jpg not found")); result.Code == "rate_limited" {
+		t.Fatal("filename was classified as rate limiting")
+	}
+}
 
 func TestRegisteredDriversMatchSupportedAccounts(t *testing.T) {
 	drivers := op.GetDriverInfoMap()

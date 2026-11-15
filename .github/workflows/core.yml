@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.27.1"
+          go-version: "1.27.4"
           cache: false
       - name: Check formatting and version
         run: |
@@ -31,8 +31,8 @@ jobs:
           test -z "$(gofmt -l native/openlist_core)"
           python3 -m py_compile .github/scripts/*.py
           python3 -m unittest discover .github/scripts/tests -v
-          go test ./drivers/123_open ./native/openlist_core/...
-          go test -tags=venera_core ./native/openlist_core/... ./internal/net ./internal/op
+          go test ./drivers/115_open ./drivers/123_open ./drivers/baidu_netdisk ./drivers/onedrive ./native/openlist_core/...
+          go test -tags=venera_core ./drivers/115_open ./drivers/baidu_netdisk ./drivers/onedrive ./native/openlist_core/... ./internal/net ./internal/op
 
   build:
     name: Build ${{ matrix.target }}
@@ -65,7 +65,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.27.1"
+          go-version: "1.27.4"
           cache: false
       - uses: actions/setup-java@v4
         if: matrix.target == 'android'
@@ -130,7 +130,7 @@ jobs:
         run: |
           cat > release-notes.md <<'EOF'
           ## **注意**
-          **beta版可能存在大量bug，无必要请勿下载**
+          **beta版可能存在大量bug，下载请做好备份**
 
           VeneraPlus embedded OpenList Core release.
           EOF

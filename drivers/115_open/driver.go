@@ -38,10 +38,16 @@ type Open115 struct {
 type embedded115Transport struct{}
 
 func (embedded115Transport) RoundTrip(request *http.Request) (*http.Response, error) {
+	transport := http.DefaultTransport
 	if client := base.HttpClient; client != nil && client.Transport != nil {
-		return client.Transport.RoundTrip(request)
+		transport = client.Transport
 	}
-	return http.DefaultTransport.RoundTrip(request)
+	response, err := transport.RoundTrip(request)
+	if err == nil && response.StatusCode == http.StatusTooManyRequests {
+		defer response.Body.Close()
+		return nil, &errs.RateLimitError{RetryAfter: response.Header.Get("Retry-After")}
+	}
+	return response, err
 }
 func (d *Open115) Config() driver.Config {
 	return config
@@ -51,19 +57,40 @@ func (d *Open115) GetAddition() driver.Additional {
 	return &d.Addition
 }
 
+// onTokenRefreshed 保留响应中缺失的令牌，并持久化轮换后的有效令牌对。
+// SDK 会先覆盖内部状态再调用此回调，因此也必须恢复客户端中被清空的令牌。
+func (d *Open115) onTokenRefreshed(accessToken, refreshToken string) {
+	if accessToken != "" {
+		d.Addition.AccessToken = accessToken
+	}
+	if refreshToken != "" {
+		d.Addition.RefreshToken = refreshToken
+	}
+	if d.client != nil {
+		d.client.SetAccessToken(d.Addition.AccessToken)
+		d.client.SetRefreshToken(d.Addition.RefreshToken)
+	}
+	op.MustSaveDriverStorage(d)
+}
+
 func (d *Open115) Init(ctx context.Context) error {
+	if d.Addition.AccessToken == "" && d.Addition.RefreshToken == "" {
+		return errors.New("access token or refresh token is required")
+	}
 	d.client = sdk.New(sdk.WithRefreshToken(d.Addition.RefreshToken),
 		sdk.WithAccessToken(d.Addition.AccessToken),
-		sdk.WithOnRefreshToken(func(s1, s2 string) {
-			d.Addition.AccessToken = s1
-			d.Addition.RefreshToken = s2
-			op.MustSaveDriverStorage(d)
-		}))
+		sdk.WithOnRefreshToken(d.onTokenRefreshed))
 	if conf.Embedded {
 		d.client.SetHttpClient(&http.Client{Transport: embedded115Transport{}})
 	}
 	if flags.Debug || flags.Dev {
 		d.client.SetDebug(true)
+	}
+	if d.Addition.AccessToken == "" {
+		// 仅配置 refresh token 时先刷新，避免 SDK 先发送未认证请求。
+		if _, err := d.client.RefreshToken(ctx); err != nil {
+			return err
+		}
 	}
 	_, err := d.client.UserInfo(ctx)
 	if err != nil {

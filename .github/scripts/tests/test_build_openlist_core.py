@@ -81,6 +81,7 @@ class BuildOpenListCoreTest(unittest.TestCase):
                 metadata = json.loads(bundle.read("metadata.json"))
             self.assertEqual(metadata["platform"], "windows-x64")
             self.assertEqual(metadata["rpcAbi"], 1)
+            self.assertEqual(metadata["goVersion"], "1.27.4")
             self.assertNotIn("minOS", metadata)
 
     def test_android_binding_requires_all_requested_jni_abis(self):

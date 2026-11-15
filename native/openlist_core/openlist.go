@@ -55,8 +55,9 @@ type response struct {
 	Error *rpcError `json:"error,omitempty"`
 }
 type rpcError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code       string `json:"code"`
+	Message    string `json:"message"`
+	RetryAfter string `json:"retryAfter,omitempty"`
 }
 type fileArguments struct {
 	AccountID string            `json:"accountId"`
@@ -126,15 +127,24 @@ func encode(data any, err *rpcError) string {
 }
 func errorResponse(err error) *rpcError {
 	code := "operation_failed"
-	if errs.IsNotFoundError(err) {
+	var limited *errs.RateLimitError
+	if errors.As(err, &limited) || rateLimitMessage.MatchString(err.Error()) {
+		code = "rate_limited"
+	} else if errs.IsNotFoundError(err) {
 		code = "not_found"
 	} else if errors.Is(err, errs.InvalidGrant) {
 		code = "invalid_grant"
 	} else if strings.Contains(strings.ToLower(err.Error()), "status code: 401") || strings.Contains(strings.ToLower(err.Error()), "unauthorized") {
 		code = "unauthorized"
 	}
-	return &rpcError{Code: code, Message: sensitiveValue.ReplaceAllString(err.Error(), "$1$2<redacted>")}
+	result := &rpcError{Code: code, Message: sensitiveValue.ReplaceAllString(err.Error(), "$1$2<redacted>")}
+	if limited != nil {
+		result.RetryAfter = limited.RetryAfter
+	}
+	return result
 }
+
+var rateLimitMessage = regexp.MustCompile(`(?i)(HTTP|status( code)?|code)[:\s]+429\b|too many requests|rate.?limit|请求(过于)?频繁|访问(过于)?频繁|操作(过于)?频繁|限流|频控`)
 
 func isTaskOperation(method string) bool {
 	return method == "cancel" || method == "cancelAll" || method == "cancelAccount" || method == "releaseTask" || method == "taskStatus"
@@ -227,7 +237,7 @@ func (c *core) initialize(dataDir, proxy string) (any, error) {
 	conf.Conf.ProxyAddress = strings.TrimSpace(proxy)
 	conf.Conf.Log.Enable = false
 	log.SetOutput(io.Discard)
-	database, err := gorm.Open(openSQLite(path.Join(dataDir, "openlist.db")+"?_journal=WAL"), &gorm.Config{
+	database, err := gorm.Open(openSQLite(path.Join(dataDir, "openlist.db")), &gorm.Config{
 		Logger:         logger.Default.LogMode(logger.Silent),
 		NamingStrategy: schema.NamingStrategy{TablePrefix: conf.Conf.Database.TablePrefix},
 	})
@@ -493,12 +503,18 @@ func (c *core) fileOperation(method string, raw json.RawMessage) (any, error) {
 		_, err := op.List(ctx, storage, "/", model.ListArgs{Refresh: true})
 		return map[string]any{"connected": err == nil}, err
 	case "list":
+		if args.Refresh {
+			op.Cache.DeleteDirectoryTree(storage, p)
+		}
 		entries, err := op.List(ctx, storage, p, model.ListArgs{Refresh: args.Refresh})
 		if err != nil {
 			return nil, err
 		}
 		result := make([]map[string]any, 0, len(entries))
 		for _, entry := range entries {
+			if args.Refresh && !entry.IsDir() {
+				op.InvalidateEmbeddedLink(storage, path.Join(p, entry.GetName()))
+			}
 			result = append(result, fileData(path.Join(p, entry.GetName()), entry))
 		}
 		return map[string]any{"entries": result}, nil
@@ -509,7 +525,9 @@ func (c *core) fileOperation(method string, raw json.RawMessage) (any, error) {
 		}
 		return fileData(p, entry), nil
 	case "link":
-		op.InvalidateEmbeddedPath(storage, p)
+		if args.Refresh {
+			op.InvalidateEmbeddedPath(storage, p)
+		}
 		link, _, err := op.Link(ctx, storage, p, model.LinkArgs{Header: requestHeaders(args.Headers)})
 		if err != nil {
 			return nil, err

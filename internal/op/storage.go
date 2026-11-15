@@ -50,8 +50,13 @@ func ResetEmbeddedStorages(ctx context.Context) {
 // InvalidateEmbeddedPath clears cached directory and direct-link state before
 // an embedded read, preventing metadata writes from merging stale bytes.
 func InvalidateEmbeddedPath(storage driver.Driver, path string) {
-	Cache.linkCache.DeleteKey(Key(storage, path))
+	InvalidateEmbeddedLink(storage, path)
 	Cache.dirCache.Delete(Key(storage, stdpath.Dir(path)))
+}
+
+// InvalidateEmbeddedLink 刷新直链时保留目录列表供同目录的其他文件复用。
+func InvalidateEmbeddedLink(storage driver.Driver, path string) {
+	Cache.linkCache.DeleteKey(Key(storage, path))
 }
 
 func GetStorageByMountPath(mountPath string) (driver.Driver, error) {
@@ -315,6 +320,37 @@ func MustSaveDriverStorage(driver driver.Driver) {
 	}
 }
 
+const (
+	storageSaveAttempts  = 5
+	storageSaveBaseDelay = 200 * time.Millisecond
+)
+
+func isTransientDBError(err error) bool {
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "database is locked") ||
+		strings.Contains(message, "sqlite_busy") ||
+		strings.Contains(message, "database table is locked")
+}
+
+// 刷新后的令牌可能立即替代旧令牌，仅对数据库暂时锁定做有限重试。
+func updateStorageWithRetry(storage *model.Storage) error {
+	var err error
+	delay := storageSaveBaseDelay
+	for attempt := 0; attempt < storageSaveAttempts; attempt++ {
+		if err = db.UpdateStorage(storage); err == nil {
+			return nil
+		}
+		if !isTransientDBError(err) {
+			return err
+		}
+		if attempt < storageSaveAttempts-1 {
+			time.Sleep(delay)
+			delay *= 2
+		}
+	}
+	return err
+}
+
 func saveDriverStorage(driver driver.Driver) error {
 	storage := driver.GetStorage()
 	addition := driver.GetAddition()
@@ -323,7 +359,7 @@ func saveDriverStorage(driver driver.Driver) error {
 		return errors.Wrap(err, "error while marshal addition")
 	}
 	storage.Addition = str
-	err = db.UpdateStorage(storage)
+	err = updateStorageWithRetry(storage)
 	if err != nil {
 		return errors.WithMessage(err, "failed update storage in database")
 	}
